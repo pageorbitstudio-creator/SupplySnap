@@ -93,7 +93,10 @@ def create_app():
         SQLALCHEMY_DATABASE_URI=database_url,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
     )
-    os.makedirs(app.instance_path, exist_ok=True)
+    # Vercel's deployed filesystem is read-only. The production database is
+    # remote, so the local instance directory is only needed for development.
+    if not is_vercel:
+        os.makedirs(app.instance_path, exist_ok=True)
     db.init_app(app); login_manager.init_app(app)
     login_manager.login_view = "login"
     login_manager.login_message_category = "warning"
