@@ -71,7 +71,10 @@ def create_app():
     app = Flask(__name__, instance_relative_config=True)
     is_vercel = bool(os.getenv("VERCEL"))
     secret_key = os.getenv("SECRET_KEY")
-    database_url = os.getenv("DATABASE_URL")
+    database_url = (os.getenv("DATABASE_URL") or "").strip()
+    if database_url.startswith("DATABASE_URL="):
+        database_url = database_url.split("=", 1)[1].strip()
+    database_url = database_url.strip("\"'")
     if is_vercel:
         missing = [name for name in ("SECRET_KEY", "DATABASE_URL", "ADMIN_EMAIL", "ADMIN_PASSWORD")
                    if not os.getenv(name)]
