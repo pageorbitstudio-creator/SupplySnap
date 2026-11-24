@@ -7,6 +7,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
+from sqlalchemy.exc import IntegrityError
 import qrcode
 
 # Neon CLI writes local connection settings to .env.local. Keep .env as a
@@ -311,7 +312,15 @@ def create_app():
             elif is_remote_database or is_vercel:
                 u=User(name=os.getenv("ADMIN_NAME", "SupplySnap Admin"),
                        email=admin_email.strip().lower(),role="admin")
-                u.set_password(admin_password); db.session.add(u); db.session.commit()
+                u.set_password(admin_password); db.session.add(u)
+                try:
+                    db.session.commit()
+                except IntegrityError:
+                    # Concurrent Vercel cold starts can both see an empty
+                    # users table and race to create the initial admin.
+                    db.session.rollback()
+                    if not User.query.first():
+                        raise
             else:
                 u=User(name="SupplySnap Admin",email="admin@supplysnap.local",role="admin")
                 u.set_password("Admin123!"); db.session.add(u); db.session.commit()
