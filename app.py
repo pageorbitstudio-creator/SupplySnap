@@ -9,7 +9,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 import qrcode
 
-load_dotenv()
+# Neon CLI writes local connection settings to .env.local. Keep .env as a
+# fallback for the existing local-development instructions.
+load_dotenv(".env.local")
+load_dotenv(".env")
 db = SQLAlchemy()
 login_manager = LoginManager()
 
@@ -81,6 +84,7 @@ def create_app():
         database_url = "postgresql+psycopg://" + database_url[len("postgres://"):]
     elif database_url.startswith("postgresql://"):
         database_url = "postgresql+psycopg://" + database_url[len("postgresql://"):]
+    is_remote_database = database_url.startswith("postgresql+psycopg://")
     app.config.update(
         SECRET_KEY=secret_key or "dev-only-change-this-secret",
         SQLALCHEMY_DATABASE_URI=database_url,
@@ -296,13 +300,16 @@ def create_app():
         if not User.query.first():
             admin_email = os.getenv("ADMIN_EMAIL")
             admin_password = os.getenv("ADMIN_PASSWORD")
-            if is_vercel and not (admin_email and admin_password):
-                app.logger.warning("No admin user created. Set ADMIN_EMAIL and ADMIN_PASSWORD in Vercel.")
-            else:
+            if (is_vercel or is_remote_database) and not (admin_email and admin_password):
+                app.logger.warning("No admin user created. Set ADMIN_EMAIL and ADMIN_PASSWORD before first login.")
+            elif is_remote_database or is_vercel:
                 u=User(name=os.getenv("ADMIN_NAME", "SupplySnap Admin"),
-                       email=(admin_email or "admin@supplysnap.local").strip().lower(),role="admin")
-                u.set_password(admin_password or "Admin123!"); db.session.add(u); db.session.commit()
-        if Supplier.query.count()==0:
+                       email=admin_email.strip().lower(),role="admin")
+                u.set_password(admin_password); db.session.add(u); db.session.commit()
+            else:
+                u=User(name="SupplySnap Admin",email="admin@supplysnap.local",role="admin")
+                u.set_password("Admin123!"); db.session.add(u); db.session.commit()
+        if not is_remote_database and Supplier.query.count()==0:
             s=Supplier(name="Northstar Supplies",contact_name="Purchasing Desk",email="orders@example.com")
             db.session.add(s); db.session.flush()
             if Product.query.count()==0:
